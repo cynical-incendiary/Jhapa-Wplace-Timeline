@@ -171,8 +171,13 @@ onMounted(() => {
         renderWorldCopies: false,
         dragRotate: false,
         touchRotate: false,
+        pitchWithRotate: false,
+        touchPitch: false,
     });
 
+    map.value.touchZoomRotate.disableRotation();
+    map.value.dragRotate.disable();
+    map.value.touchPitch.disable();
 
     map.value.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
