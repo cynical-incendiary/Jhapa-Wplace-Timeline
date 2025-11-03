@@ -80,7 +80,7 @@ function create_tile_sources() {
             `tiles-${slug}`,
             {
                 type: "image",
-                url: `/tiles/tile_backup_${slug}.png`,
+                url: `${import.meta.env.BASE_URL}tiles/tile_backup_${slug}.png`,
                 coordinates: TILE_BOUNDS,
             },
         ])
