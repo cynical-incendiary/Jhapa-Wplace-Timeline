@@ -1,0 +1,61 @@
+name: Backup and Process Tiles
+
+on:
+  schedule:
+    - cron: "0 0 */2 * *" # Run every 2 days at midnight UTC
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+jobs:
+  backup-and-process:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run backup tiles
+        run: node ./backup_tiles.js
+
+      - name: Process tiles
+        run: node process-tiles.js
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push changes
+        run: |
+          git add public/tiles/ src/map-config-generated.js
+          git reset -- public/tiles/raw/
+          git commit -m "Update tiles and map configuration [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Build site
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: "./dist"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
