@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm run tile-split && vite --host",
-    "build": "npm run tile-split && vite build",
+    "dev": "vite --host",
+    "build": "vite build",
     "preview": "vite preview",
-    "tile-split": "node ./process-tiles.js",
+    "split": "node ./process-tiles.js",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
