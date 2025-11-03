@@ -9,10 +9,7 @@
     "preview": "vite preview",
     "split": "node ./process-tiles.js",
     "sd": "node ./process-tiles.js && npm run dev",
-    "backup": "node ./backup_tiles.js",
-    
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "backup": "node ./backup_tiles.js"
   },
   "dependencies": {
     "form-data": "^4.0.0",
