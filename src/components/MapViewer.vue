@@ -139,11 +139,6 @@ onMounted(() => {
         renderWorldCopies: false,
     });
 
-    map.value.on("load", () => {
-        time_strings.forEach(slug => {
-            map.value.setPaintProperty(`tiles-${slug}`, "raster-opacity", 1);
-        });
-    });
 
     map.value.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 });
