@@ -4,32 +4,40 @@ import path from "path";
 
 const RAW_DIR = "public/tiles/raw";
 const OUTPUT_DIR = "public/tiles";
-const CONFIG_FILE = "src/map-config-generated.js"; // New output file
+const CONFIG_FILE = "src/map-config-generated.js";
 const QUADS = ["tl", "tr", "bl", "br"];
 
-// Hardcoded coordinates from your original TILE_BOUNDS.
-// If your TILE_BOUNDS ever change, you MUST update these 4 values!
 const CONSTANTS = {
   MIN_LON: 87.18758755927735,
   MAX_LON: 88.24209927802731,
   MIN_LAT: 26.431307064519423,
   MAX_LAT: 26.902398802791005,
-  // Add the single time string here for the config file as well
-  TIME_STRINGS: ["2025-11-02T02-49-27-039Z"],
 };
 
-// --- Core Logic for Coordinate Calculation ---
+async function findTimeStringsFromOutput() {
+  const files = await fs.readdir(OUTPUT_DIR);
+  const timeSet = new Set();
+  const tileFileRegex = /^tile_backup_(.+?)_(tl|tr|bl|br)\.png$/;
 
-function generateCoordinateConfig() {
-  const { MIN_LON, MAX_LON, MIN_LAT, MAX_LAT } = CONSTANTS;
+  for (const file of files) {
+    const match = file.match(tileFileRegex);
+    if (match) {
+      timeSet.add(match[1]);
+    }
+  }
 
-  // Find the center points
+  return Array.from(timeSet).sort();
+}
+
+async function generateCoordinateConfig(timeStrings) {
+  const { MIN_LON, MAX_LON, MIN_LAT, MAX_LAT } = CONSTANTS; // Find the center points
+
   const MID_LON = (MIN_LON + MAX_LON) / 2;
-  const MID_LAT = (MIN_LAT + MAX_LAT) / 2;
+  const MID_LAT =
+    (MIN_LAT + MAX_LAT) / 2; /* MapLibre requires coordinates in the order: 
+    [top-left, top-right, bottom-right, bottom-left] 
+    */
 
-  /* MapLibre requires coordinates in the order: 
-    [top-left, top-right, bottom-right, bottom-left] 
-    */
   const QUADRANT_COORDS = {
     tl: [
       [MIN_LON, MAX_LAT],
@@ -66,9 +74,7 @@ function generateCoordinateConfig() {
   jsContent += `export const MAX_LON = ${MAX_LON};\n`;
   jsContent += `export const MIN_LAT = ${MIN_LAT};\n`;
   jsContent += `export const MAX_LAT = ${MAX_LAT};\n`;
-  jsContent += `export const TIME_STRINGS = ${JSON.stringify(
-    CONSTANTS.TIME_STRINGS
-  )};\n`;
+  jsContent += `export const TIME_STRINGS = ${JSON.stringify(timeStrings)};\n`;
 
   return jsContent;
 }
@@ -164,7 +170,7 @@ async function processRawDirectory() {
 
     if (imageFiles.length === 0) {
       console.log(
-        `No 'tile_backup_*.png' files found in ${RAW_DIR}. Nothing to do.`
+        `No 'tile_backup_*.png' files found in ${RAW_DIR}. Skipping image processing.`
       );
     } else {
       console.log(`Found ${imageFiles.length} images to process.`);
@@ -173,8 +179,19 @@ async function processRawDirectory() {
       }
     }
 
+    console.log("\nSearching for all processed tile slugs...");
+    const allTimeStrings = await findTimeStringsFromOutput();
+
+    if (allTimeStrings.length === 0) {
+      console.warn(
+        "⚠️ WARNING: No processed tiles found in the output directory. TIME_STRINGS will be empty."
+      );
+    } else {
+      console.log(`Found ${allTimeStrings.length} unique time steps.`);
+    }
+
     console.log("\nGenerating coordinate configuration file...");
-    const configContent = generateCoordinateConfig();
+    const configContent = await generateCoordinateConfig(allTimeStrings);
     await fs.writeFile(CONFIG_FILE, configContent);
     console.log(`✅ Successfully wrote config to ${CONFIG_FILE}`);
 

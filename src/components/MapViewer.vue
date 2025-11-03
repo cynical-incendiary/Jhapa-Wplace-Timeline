@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -49,6 +49,9 @@ const map_container = ref(null);
 const map = ref(null);
 const selected_index = ref(0);
 
+const previous_index = ref(null);
+const is_map_ready = ref(false);
+
 const times = TIME_STRINGS.map(slug =>
     new Date(slug.replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, "T$1:$2:$3.$4Z"))
 );
@@ -65,67 +68,82 @@ const current_time_formatted = computed(() =>
 function go_previous() {
     if (selected_index.value > 0) {
         selected_index.value--;
-        update_tile_opacity();
     }
 }
 
 function go_next() {
     if (selected_index.value < TIME_STRINGS.length - 1) {
         selected_index.value++;
-        update_tile_opacity();
     }
 }
 
-// Updated to use 4 quadrants per time string
-function create_tile_sources() {
-    let sources = {};
-    for (const slug of TIME_STRINGS) {
-        for (const quad of QUADS) {
-            sources[`tiles-${slug}-${quad}`] = {
+function add_tiles_for_timestep(slug) {
+    if (!map.value || !map.value.isStyleLoaded()) return;
+
+    for (const quad of QUADS) {
+        const source_id = `tiles-${slug}-${quad}`;
+        const layer_id = source_id;
+
+        if (!map.value.getSource(source_id)) {
+            map.value.addSource(source_id, {
                 type: "image",
-                // Points to the newly split image files
                 url: `${import.meta.env.BASE_URL}tiles/tile_backup_${slug}_${quad}.png`,
                 coordinates: QUADRANT_COORDS[quad],
-            };
-        }
-    }
-    return sources;
-}
+            });
 
-function create_tile_layers() {
-    let layers = [];
-    TIME_STRINGS.forEach((slug, idx) => {
-        for (const quad of QUADS) {
-            layers.push({
-                id: `tiles-${slug}-${quad}`,
+            map.value.addLayer({
+                id: layer_id,
                 type: "raster",
-                source: `tiles-${slug}-${quad}`,
+                source: source_id,
                 paint: {
-                    // Only the first time index (idx === 0) is visible initially
-                    "raster-opacity": idx === 0 ? 1 : 0,
+                    "raster-opacity": 1, // Start visible
                     "raster-resampling": "nearest",
                 },
             });
+        } else {
+            map.value.setPaintProperty(layer_id, "raster-opacity", 1);
         }
-    });
-    return layers;
+    }
 }
 
-// Updated to set opacity for all 4 quadrants simultaneously
-function update_tile_opacity() {
-    if (!map.value?.isStyleLoaded()) return;
+function remove_tiles_for_timestep(slug) {
+    if (!map.value || !map.value.isStyleLoaded()) return;
 
-    TIME_STRINGS.forEach((slug, idx) => {
-        const opacity = idx === selected_index.value ? 1 : 0;
-        for (const quad of QUADS) {
-            map.value.setPaintProperty(
-                `tiles-${slug}-${quad}`,
-                "raster-opacity",
-                opacity
-            );
+    for (const quad of QUADS) {
+        const source_id = `tiles-${slug}-${quad}`;
+        const layer_id = source_id;
+
+        if (map.value.getLayer(layer_id)) {
+            map.value.removeLayer(layer_id);
         }
-    });
+        if (map.value.getSource(source_id)) {
+            map.value.removeSource(source_id);
+        }
+    }
 }
+
+
+function update_map_tiles() {
+    if (!is_map_ready.value) return;
+
+    const current_slug = TIME_STRINGS[selected_index.value];
+    const previous_slug = TIME_STRINGS[previous_index.value];
+
+    if (previous_index.value !== null && previous_index.value !== selected_index.value) {
+        remove_tiles_for_timestep(previous_slug);
+    }
+
+    add_tiles_for_timestep(current_slug);
+
+    previous_index.value = selected_index.value;
+}
+
+watch(selected_index, (newVal, oldVal) => {
+    if (is_map_ready.value) {
+        previous_index.value = oldVal;
+        update_map_tiles();
+    }
+});
 
 onMounted(() => {
     map.value = new maplibregl.Map({
@@ -139,28 +157,29 @@ onMounted(() => {
                     tileSize: 256,
                     attribution: "© OpenStreetMap contributors",
                 },
-                ...create_tile_sources(),
             },
             layers: [
                 { id: "background", type: "background", paint: { "background-color": "#1a1a1a" } },
                 { id: "osm-base", type: "raster", source: "osm-tiles" },
-                ...create_tile_layers(),
             ],
         },
         center: DAMAK_CENTER,
         zoom: 11,
         minZoom: 6,
         maxZoom: 18,
-        // Uses the generated min/max coordinates for the overall bounds
         maxBounds: [[MIN_LON, MIN_LAT], [MAX_LON, MAX_LAT]],
         renderWorldCopies: false,
         dragRotate: false,
         touchRotate: false,
     });
 
-    // DELETE: The conflicting map.on('load') block is removed as planned.
 
     map.value.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+
+    map.value.on("load", () => {
+        is_map_ready.value = true;
+        update_map_tiles();
+    });
 });
 </script>
 

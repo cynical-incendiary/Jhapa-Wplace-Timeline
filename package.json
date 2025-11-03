@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "split": "node ./process-tiles.js",
+    "sd": "node ./process-tiles.js && npm run dev",
+    
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
