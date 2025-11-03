@@ -154,6 +154,8 @@ onMounted(() => {
         // Uses the generated min/max coordinates for the overall bounds
         maxBounds: [[MIN_LON, MIN_LAT], [MAX_LON, MAX_LAT]],
         renderWorldCopies: false,
+        dragRotate: false,
+        touchRotate: false,
     });
 
     // DELETE: The conflicting map.on('load') block is removed as planned.
