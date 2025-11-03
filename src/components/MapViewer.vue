@@ -10,9 +10,9 @@
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
-                <input type="range" :min="0" :max="time_strings.length - 1" v-model.number="selected_index"
+                <input type="range" :min="0" :max="TIME_STRINGS.length - 1" v-model.number="selected_index"
                     @input="update_tile_opacity" class="timeline-slider" />
-                <button @click="go_next" :disabled="selected_index === time_strings.length - 1"
+                <button @click="go_next" :disabled="selected_index === TIME_STRINGS.length - 1"
                     class="nav-button next-button">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -33,21 +33,23 @@ import { ref, computed, onMounted } from "vue";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-const DAMAK_CENTER = [87.6750, 26.6656];
-const TILE_BOUNDS = [
-    [87.18758755927735, 26.902398802791005],
-    [88.24209927802731, 26.902398802791005],
-    [88.24209927802731, 26.431307064519423],
-    [87.18758755927735, 26.431307064519423],
-];
+import {
+    TIME_STRINGS,
+    QUADRANT_COORDS,
+    QUADS,
+    MIN_LON,
+    MAX_LON,
+    MIN_LAT,
+    MAX_LAT
+} from "../map-config-generated";
 
-const time_strings = ["2025-11-02T02-49-27-039Z"];
+const DAMAK_CENTER = [87.6750, 26.6656];
 
 const map_container = ref(null);
 const map = ref(null);
 const selected_index = ref(0);
 
-const times = time_strings.map(slug =>
+const times = TIME_STRINGS.map(slug =>
     new Date(slug.replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, "T$1:$2:$3.$4Z"))
 );
 
@@ -68,46 +70,60 @@ function go_previous() {
 }
 
 function go_next() {
-    if (selected_index.value < time_strings.length - 1) {
+    if (selected_index.value < TIME_STRINGS.length - 1) {
         selected_index.value++;
         update_tile_opacity();
     }
 }
 
+// Updated to use 4 quadrants per time string
 function create_tile_sources() {
-    return Object.fromEntries(
-        time_strings.map(slug => [
-            `tiles-${slug}`,
-            {
+    let sources = {};
+    for (const slug of TIME_STRINGS) {
+        for (const quad of QUADS) {
+            sources[`tiles-${slug}-${quad}`] = {
                 type: "image",
-                url: `${import.meta.env.BASE_URL}tiles/tile_backup_${slug}.png`,
-                coordinates: TILE_BOUNDS,
-            },
-        ])
-    );
+                // Points to the newly split image files
+                url: `${import.meta.env.BASE_URL}tiles/tile_backup_${slug}_${quad}.png`,
+                coordinates: QUADRANT_COORDS[quad],
+            };
+        }
+    }
+    return sources;
 }
 
 function create_tile_layers() {
-    return time_strings.map((slug, idx) => ({
-        id: `tiles-${slug}`,
-        type: "raster",
-        source: `tiles-${slug}`,
-        paint: {
-            "raster-opacity": idx === 0 ? 1 : 0,
-            "raster-resampling": "nearest",
-        },
-    }));
+    let layers = [];
+    TIME_STRINGS.forEach((slug, idx) => {
+        for (const quad of QUADS) {
+            layers.push({
+                id: `tiles-${slug}-${quad}`,
+                type: "raster",
+                source: `tiles-${slug}-${quad}`,
+                paint: {
+                    // Only the first time index (idx === 0) is visible initially
+                    "raster-opacity": idx === 0 ? 1 : 0,
+                    "raster-resampling": "nearest",
+                },
+            });
+        }
+    });
+    return layers;
 }
 
+// Updated to set opacity for all 4 quadrants simultaneously
 function update_tile_opacity() {
     if (!map.value?.isStyleLoaded()) return;
 
-    time_strings.forEach((slug, idx) => {
-        map.value.setPaintProperty(
-            `tiles-${slug}`,
-            "raster-opacity",
-            idx === selected_index.value ? 1 : 0
-        );
+    TIME_STRINGS.forEach((slug, idx) => {
+        const opacity = idx === selected_index.value ? 1 : 0;
+        for (const quad of QUADS) {
+            map.value.setPaintProperty(
+                `tiles-${slug}-${quad}`,
+                "raster-opacity",
+                opacity
+            );
+        }
     });
 }
 
@@ -135,10 +151,12 @@ onMounted(() => {
         zoom: 11,
         minZoom: 6,
         maxZoom: 18,
-        maxBounds: [[86.5, 26.2], [88.4, 27.2]],
+        // Uses the generated min/max coordinates for the overall bounds
+        maxBounds: [[MIN_LON, MIN_LAT], [MAX_LON, MAX_LAT]],
         renderWorldCopies: false,
     });
 
+    // DELETE: The conflicting map.on('load') block is removed as planned.
 
     map.value.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 });
@@ -168,6 +186,8 @@ onMounted(() => {
     border-radius: 12px;
     min-width: 400px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    /* Ensure controls are above the map */
 }
 
 .time-display {
