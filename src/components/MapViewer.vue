@@ -11,7 +11,7 @@
                     </svg>
                 </button>
                 <input type="range" :min="0" :max="TIME_STRINGS.length - 1" v-model.number="selected_index"
-                    @input="update_tile_opacity" class="timeline-slider" />
+                    class="timeline-slider" />
                 <button @click="go_next" :disabled="selected_index === TIME_STRINGS.length - 1"
                     class="nav-button next-button">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -51,6 +51,8 @@ const selected_index = ref(0);
 
 const previous_index = ref(null);
 const is_map_ready = ref(false);
+const active_slugs = new Set();
+let debounce_timer = null;
 
 const times = TIME_STRINGS.map(slug =>
     new Date(slug.replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, "T$1:$2:$3.$4Z"))
@@ -127,42 +129,33 @@ function update_map_tiles() {
     if (!is_map_ready.value) return;
 
     const current_slug = TIME_STRINGS[selected_index.value];
-    const previous_slug = TIME_STRINGS[previous_index.value];
 
-    if (previous_index.value !== null && previous_index.value !== selected_index.value) {
-        remove_tiles_for_timestep(previous_slug);
+    for (const slug of [...active_slugs]) {
+        if (slug !== current_slug) {
+            remove_tiles_for_timestep(slug);
+            active_slugs.delete(slug);
+        }
     }
 
     add_tiles_for_timestep(current_slug);
+    active_slugs.add(current_slug);
 
     previous_index.value = selected_index.value;
 }
 
-watch(selected_index, (newVal, oldVal) => {
+watch(selected_index, () => {
     if (is_map_ready.value) {
-        previous_index.value = oldVal;
-        update_map_tiles();
+        clearTimeout(debounce_timer);
+        debounce_timer = setTimeout(() => {
+            update_map_tiles();
+        }, 150);
     }
 });
 
 onMounted(() => {
     map.value = new maplibregl.Map({
         container: map_container.value,
-        style: {
-            version: 8,
-            sources: {
-                "osm-tiles": {
-                    type: "raster",
-                    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-                    tileSize: 256,
-                    attribution: "© OpenStreetMap contributors",
-                },
-            },
-            layers: [
-                { id: "background", type: "background", paint: { "background-color": "#1a1a1a" } },
-                { id: "osm-base", type: "raster", source: "osm-tiles" },
-            ],
-        },
+        style: "https://maps.wplace.live/styles/liberty",
         center: DAMAK_CENTER,
         zoom: 11,
         minZoom: 6,
