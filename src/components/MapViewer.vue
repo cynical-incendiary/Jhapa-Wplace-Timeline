@@ -51,7 +51,6 @@ const selected_index = ref(0);
 
 const previous_index = ref(null);
 const is_map_ready = ref(false);
-const active_slugs = new Set();
 let debounce_timer = null;
 
 const times = TIME_STRINGS.map(slug =>
@@ -80,7 +79,7 @@ function go_next() {
 }
 
 function add_tiles_for_timestep(slug) {
-    if (!map.value || !map.value.isStyleLoaded()) return;
+    if (!map.value) return;
 
     for (const quad of QUADS) {
         const source_id = `tiles-${slug}-${quad}`;
@@ -109,7 +108,7 @@ function add_tiles_for_timestep(slug) {
 }
 
 function remove_tiles_for_timestep(slug) {
-    if (!map.value || !map.value.isStyleLoaded()) return;
+    if (!map.value) return;
 
     for (const quad of QUADS) {
         const source_id = `tiles-${slug}-${quad}`;
@@ -126,19 +125,27 @@ function remove_tiles_for_timestep(slug) {
 
 
 function update_map_tiles() {
-    if (!is_map_ready.value) return;
+    if (!is_map_ready.value || !map.value) return;
 
     const current_slug = TIME_STRINGS[selected_index.value];
 
-    for (const slug of [...active_slugs]) {
-        if (slug !== current_slug) {
-            remove_tiles_for_timestep(slug);
-            active_slugs.delete(slug);
-        }
+    const style = map.value.getStyle();
+    if (style && style.layers) {
+        const layers_to_remove = style.layers
+            .filter(l => l.id.startsWith("tiles-") && !l.id.includes(current_slug))
+            .map(l => l.id);
+
+        layers_to_remove.forEach(layer_id => {
+            if (map.value.getLayer(layer_id)) {
+                map.value.removeLayer(layer_id);
+            }
+            if (map.value.getSource(layer_id)) {
+                map.value.removeSource(layer_id);
+            }
+        });
     }
 
     add_tiles_for_timestep(current_slug);
-    active_slugs.add(current_slug);
 
     previous_index.value = selected_index.value;
 }
