@@ -155,7 +155,21 @@ watch(selected_index, () => {
 onMounted(() => {
     map.value = new maplibregl.Map({
         container: map_container.value,
-        style: "https://maps.wplace.live/styles/liberty",
+        style: {
+            version: 8,
+            sources: {
+                "osm-tiles": {
+                    type: "raster",
+                    tiles: ["https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
+                    tileSize: 256,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                },
+            },
+            layers: [
+                { id: "background", type: "background", paint: { "background-color": "#f8f4f0" } },
+                { id: "osm-base", type: "raster", source: "osm-tiles" },
+            ],
+        },
         center: DAMAK_CENTER,
         zoom: 11,
         minZoom: 6,
